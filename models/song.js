@@ -1,4 +1,4 @@
-import { Schema, model, mongo } from "mongoose";
+import { Schema, model } from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
 
 const SongSchema = Schema({
@@ -16,6 +16,12 @@ const SongSchema = Schema({
     type: String,
     required: true,
   },
+  likes: [
+    {
+      type: Schema.ObjectId,
+      ref: "User",
+    },
+  ],
   created_at: {
     type: Date,
     default: Date.now,

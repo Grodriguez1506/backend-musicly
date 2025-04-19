@@ -33,16 +33,22 @@ router.delete(
 );
 router.put("/playlist/edit/:id?", [auth, userAccess], playlistController.edit);
 router.post(
-  "/playlist/add-song/:id?",
+  "/playlist/add-song",
   [auth, userAccess],
   playlistController.addSong
 );
+router.delete(
+  "/playlist/delete-song",
+  [auth, userAccess],
+  playlistController.deleteSong
+);
 router.get("/playlist/list", [auth, userAccess], playlistController.list);
 router.get("/playlist/one/:id?", [auth, userAccess], playlistController.one);
+router.get("/playlist/cover/:id?", playlistController.cover);
 router.get(
-  "/playlist/cover/:id?",
+  "/playlist/find-by-song/:song?",
   [auth, userAccess],
-  playlistController.cover
+  playlistController.findBySong
 );
 
 export default router;

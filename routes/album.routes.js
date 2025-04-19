@@ -36,6 +36,7 @@ router.delete(
   [auth, artistAccess],
   albumController.remove
 );
-router.get("/album/list/:id?/:page?", auth, albumController.list);
+router.get("/album/list-by-artist/:id?", auth, albumController.listByArtist);
+router.get("/album/media/:id?", albumController.media);
 
 export default router;

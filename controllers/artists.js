@@ -2,16 +2,20 @@ import Artist from "../models/artists.js";
 import Song from "../models/song.js";
 import Album from "../models/album.js";
 import Follow from "../models/follow.js";
+import jwt from "jsonwebtoken";
 import validators from "../helpers/validate.js";
 import bcrypt from "bcrypt";
-import { createAccessToken } from "../helpers/jwt.js";
+import {
+  createAccessToken,
+  createRefreshToken,
+  createNewAccesToken,
+} from "../helpers/jwt.js";
 import path from "path";
-import fs from "fs";
+import fs, { stat } from "fs";
+import { getRootPath } from "../rootpath.js";
 
 const register = async (req, res) => {
   let params = req.body;
-
-  console.log(params);
 
   if (
     !params.name ||
@@ -21,7 +25,7 @@ const register = async (req, res) => {
   ) {
     return res.status(404).json({
       status: "error",
-      message: "Faltan datos por enviar",
+      message: "Name, artistic name, email and password are mandatory fields",
     });
   }
 
@@ -42,7 +46,7 @@ const register = async (req, res) => {
     if (usernameFound) {
       return res.status(400).json({
         status: "error",
-        message: "El nombre de usuario ya existe",
+        message: "Artistic name already exists",
       });
     }
 
@@ -51,7 +55,7 @@ const register = async (req, res) => {
     if (emailFound) {
       return res.status(400).json({
         status: "error",
-        message: "El email ingresado ya existe",
+        message: "Email already exists",
       });
     }
 
@@ -64,14 +68,12 @@ const register = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Artista registrado exitosamente",
       user: newUser,
     });
   } catch (error) {
-    // console.log(error);
     return res.status(500).json({
       status: "error",
-      message: "Error al registrar artista",
+      message: "Something went wrong",
     });
   }
 };
@@ -82,7 +84,7 @@ const login = async (req, res) => {
   if (!email || !password) {
     return res.status(401).json({
       status: "error",
-      message: "Faltan datos por suministrar",
+      message: "Both fields are mandatory",
     });
   }
 
@@ -94,7 +96,7 @@ const login = async (req, res) => {
     if (!artistFound) {
       return res.status(404).json({
         status: "error",
-        message: "Credenciales inválidas",
+        message: "Invalid credentials",
       });
     }
 
@@ -103,29 +105,54 @@ const login = async (req, res) => {
     if (!isMatch) {
       return res.status(404).json({
         status: "error",
-        message: "Credenciales inválidas",
+        message: "Invalid credentials",
       });
     }
 
+    const refreshToken = createRefreshToken(artistFound);
     const token = createAccessToken(artistFound);
 
-    res.cookie("access_token", token, {
+    res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: "Strict",
+      secure: true,
+      sameSite: "none",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // Expira en 7 días
     });
 
     return res.status(200).json({
-      status: "success",
-      message: "Incio de sesión exitoso",
-      artist: artistFound,
+      token,
     });
   } catch (error) {
-    return res.status(404).json({
+    return res.status(500).json({
       status: "error",
-      message: "Credenciales inválidas",
+      message: "Something went wrong",
     });
   }
+};
+
+const refresh = (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+
+  if (!refreshToken) {
+    return res.status(403).json({ message: "There's not refresh token" });
+  }
+
+  jwt.verify(refreshToken, process.env.REFRESH_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({
+        status: "error",
+        message: "Refresh token expired, please login again",
+      });
+    }
+
+    const newAccessToken = createNewAccesToken(user);
+
+    return res.json({
+      status: "success",
+      token: newAccessToken,
+    });
+  });
 };
 
 const profile = async (req, res) => {
@@ -136,24 +163,120 @@ const profile = async (req, res) => {
   }
 
   try {
-    const songs = await Song.countDocuments({ artist: artistIdentity.id });
-    const albums = await Album.countDocuments({ artist: artistIdentity.id });
-    const followers = await Follow.countDocuments({
-      artist: artistIdentity.id,
+    const artist = await Artist.findById(artistIdentity.id).select(
+      "-__v -role"
+    );
+
+    return res.status(200).json({
+      status: "success",
+      message: "Artist profile",
+      artist,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "No se encontró el perfil del artista",
+    });
+  }
+};
+
+const search = async (req, res) => {
+  const search = req.params.search;
+  const user = req.user.id;
+
+  try {
+    const artistsFound = await Artist.find({
+      artisticName: { $regex: search, $options: "i" },
+    });
+
+    if (artistsFound.length == 0) {
+      return res.status(200).json({
+        status: "success",
+        message: "There aren't artists with this name",
+      });
+    }
+
+    const following = await Follow.find({ user });
+
+    let follows = [];
+
+    following.forEach((follow) => {
+      follows.push(follow.artist);
     });
 
     return res.status(200).json({
       status: "success",
-      message: "Perfil de artista",
-      albums,
-      songs,
-      followers,
+      artists: artistsFound,
+      follows,
     });
   } catch (error) {
-    console.log(error);
     return res.status(500).json({
       status: "error",
-      message: "No se encontró el perfil del artista",
+      message: "Something went wrong",
+    });
+  }
+};
+
+const avatar = async (req, res) => {
+  const file = req.params.file;
+  if (!file) {
+    return res.status(404).json({
+      status: "error",
+      message: "The file in the URL is mandatory",
+    });
+  }
+  try {
+    const artistFound = await Artist.findOne({ avatar: file });
+    if (!artistFound) {
+      return res.status(404).json({
+        status: "error",
+        message: "The file doesn't exist",
+      });
+    }
+
+    const rootPath = getRootPath();
+    const filename = artistFound.avatar;
+    const filePath = path.join(rootPath, "uploads", "avatar", filename);
+
+    return res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong",
+    });
+  }
+};
+
+const list = async (req, res) => {
+  const user = req.user.id;
+
+  try {
+    const artistsFound = await Artist.find().select("-__v -role");
+
+    if (artistsFound.length == 0) {
+      return res.status(200).json({
+        status: "success",
+        message: "There aren't artists registered yet",
+      });
+    }
+
+    const following = await Follow.find({ user });
+
+    let follows = [];
+
+    following.forEach((follow) => {
+      follows.push(follow.artist);
+    });
+
+    return res.status(200).json({
+      status: "success",
+      artists: artistsFound,
+      follows,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong",
     });
   }
 };
@@ -208,18 +331,22 @@ const uploadAvatar = async (req, res) => {
 };
 
 const logout = (req, res) => {
-  res.clearCookie("access_token");
+  res.clearCookie("refreshToken");
 
   return res.status(200).json({
     status: "error",
-    message: "Cierre de sesión exitoso",
+    message: "Loged out successfully",
   });
 };
 
 export default {
   register,
+  list,
   login,
+  refresh,
   profile,
   uploadAvatar,
+  avatar,
+  search,
   logout,
 };

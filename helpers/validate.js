@@ -24,7 +24,7 @@ const validateRegister = (params) => {
   if (params.username) {
     let username = validator.isLength(params.username, {
       min: 2,
-      max: undefined,
+      max: 18,
     });
 
     if (!username) {
@@ -35,7 +35,7 @@ const validateRegister = (params) => {
   if (params.artisticName) {
     let artisticName = validator.isLength(params.artisticName, {
       min: 2,
-      max: undefined,
+      max: 18,
     });
 
     if (!artisticName) {

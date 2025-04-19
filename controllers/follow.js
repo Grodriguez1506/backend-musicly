@@ -1,8 +1,12 @@
 import Artist from "../models/artists.js";
 import Follow from "../models/follow.js";
+import Song from "../models/song.js";
+import Album from "../models/album.js";
+import album from "../models/album.js";
+import song from "../models/song.js";
 
 const save = async (req, res) => {
-  const artist = req.params.id;
+  const artist = req.body.artist;
   const user = req.user.id;
 
   if (!artist) {
@@ -44,11 +48,10 @@ const save = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Artista seguido exitosamente",
+      message: "Artist followed successfully",
       artistFollowed,
     });
   } catch (error) {
-    console.log(error);
     return res.status(500).json({
       status: "error",
       message: "Error al seguir artista",
@@ -57,7 +60,7 @@ const save = async (req, res) => {
 };
 
 const unfollow = async (req, res) => {
-  const artist = req.params.id;
+  const artist = req.body.id;
   const user = req.user.id;
 
   if (!artist) {
@@ -89,7 +92,7 @@ const unfollow = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Has dejado de seguir al artista seleccionado",
+      message: "Artist unfollowed successfully",
       followDeleted: followValidation,
     });
   } catch (error) {
@@ -117,8 +120,7 @@ const followedArtists = async (req, res) => {
       });
     }
     return res.status(200).json({
-      status: "error",
-      message: "Artists followed",
+      status: "success",
       followedArtists: artists,
     });
   } catch (error) {
@@ -129,8 +131,67 @@ const followedArtists = async (req, res) => {
   }
 };
 
+const feed = async (req, res) => {
+  const user = req.user.id;
+
+  try {
+    const follows = await Follow.find({ user });
+
+    if (follows.length == 0) {
+      return res.status(200).json({
+        status: "error",
+        message: "There aren't followed artists",
+      });
+    }
+
+    let artists = [];
+
+    follows.forEach((follow) => {
+      artists.push(follow.artist);
+    });
+
+    const songsFound = await Song.find({ artist: artists }).populate(
+      "artist",
+      "-__v -role"
+    );
+
+    let songs = [];
+
+    songsFound.forEach((song) => {
+      let songObj = song.toObject();
+      songObj.type = "song";
+      songs.push(songObj);
+    });
+
+    const albumsFound = await Album.find({ artist: artists }).populate(
+      "artist",
+      "-__v -role"
+    );
+
+    let albums = [];
+
+    albumsFound.forEach((album) => {
+      let albumObj = album.toObject();
+      albumObj.type = "album";
+      albums.push(albumObj);
+    });
+
+    let feed = [...songs, ...albums];
+
+    feed.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    return res.status(200).json({
+      status: "success",
+      feed,
+    });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
 export default {
   save,
   unfollow,
   followedArtists,
+  feed,
 };

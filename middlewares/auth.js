@@ -21,7 +21,7 @@ const auth = (req, res, next) => {
   } catch (error) {
     return res.status(401).json({
       status: "error",
-      message: "The token has expired please login again",
+      message: "Access token has expired",
     });
   }
 };

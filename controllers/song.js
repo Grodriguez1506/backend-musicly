@@ -9,7 +9,7 @@ const save = async (req, res) => {
   if (!file || !params.name) {
     return res.status(401).json({
       status: "error",
-      message: "Faltan datos por enviar",
+      message: "Both fields are mandatory",
     });
   }
 
@@ -20,12 +20,12 @@ const save = async (req, res) => {
 
       return res.status(400).json({
         status: "error",
-        message: "Extensión de archivo inválida",
+        message: "Invalid extension",
       });
     } catch (error) {
       return res.status(500).json({
         status: "error",
-        message: "Error al intentar borrar el archivo",
+        message: "Something went wrong trying to delete the file",
       });
     }
   }
@@ -41,14 +41,14 @@ const save = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Canción cargada exitosamente",
+      message: "Song uploaded successfully",
       song: newSong,
     });
   } catch (error) {
     console.log(error);
     return res.status(500).json({
       status: "error",
-      message: "Error al cargar la canción",
+      message: "Something went wrong",
     });
   }
 };
@@ -141,18 +141,11 @@ const remove = async (req, res) => {
 };
 
 const list = async (req, res) => {
-  let artistId = req.user.id;
-  let page = 1;
+  let page;
 
-  if (req.params.id) {
-    if (!isNaN(req.params.id)) {
-      page = req.params.id;
-    } else {
-      artistId = req.params.id;
-    }
-  }
-
-  if (req.params.page) {
+  if (!req.params.page) {
+    page = 1;
+  } else {
     page = req.params.page;
   }
 
@@ -161,13 +154,13 @@ const list = async (req, res) => {
     limit: 5,
     select: "-__v",
     populate: [
-      { path: "artist", select: "name surname artisticName" },
-      { path: "album", select: "-image -__v -artist" },
+      { path: "artist", select: "-__v -role" },
+      { path: "album", select: "-__v" },
     ],
   };
 
   try {
-    const songs = await Song.paginate({ artist: artistId }, options);
+    const songs = await Song.paginate({}, options);
 
     if (page > songs.totalPages) {
       return res.status(400).json({
@@ -182,41 +175,144 @@ const list = async (req, res) => {
     if (songs.docs.length < 1) {
       return res.status(404).json({
         status: "error",
-        message:
-          "No se han encontrado canciones del artista seleccionado, valida el id suministrado",
+        message: "There isn't songs yet",
       });
     }
 
     return res.status(200).json({
       status: "success",
-      message: "Lista de canciones",
+      message: "Songs list",
       totalSongs: songs.totalDocs,
       itemsPerPage: songs.limit,
       totalPages: songs.totalPages,
       currentPage: songs.page,
       songs: songs.docs,
+      prev: songs.hasPrevPage,
+      next: songs.hasNextPage,
     });
   } catch (error) {
     console.log(error);
     return res.status(500).json({
       status: "error",
-      message: "Se ha producido un error en la búsqueda",
+      message: "Something went wrong",
+    });
+  }
+};
+
+const listByArtist = async (req, res) => {
+  const artist = req.params.id;
+
+  try {
+    const songsFound = await Song.find({ artist })
+      .select("-__v")
+      .populate("artist", "-__v -role")
+      .populate("album", "-__v");
+
+    if (songsFound.length == 0) {
+      return res.status(200).json({
+        status: "error",
+        message: "Artist doesn't have songs yet",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      songs: songsFound,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong whit list",
+    });
+  }
+};
+
+const listByAlbum = async (req, res) => {
+  const album = req.params.id;
+
+  try {
+    const songsFound = await Song.find({ album })
+      .select("-__v")
+      .populate("artist", "-__v -role")
+      .populate("album", "-__v");
+
+    if (songsFound.length == 0) {
+      return res.status(200).json({
+        status: "error",
+        message: "Album doesn't have songs yet",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      songs: songsFound,
+    });
+  } catch (error) {
+    return res.staus(500).json({
+      status: "error",
+      message: "Something went wrong",
+    });
+  }
+};
+
+const likes = async (req, res) => {
+  const song = req.params.id;
+
+  try {
+    const songFound = await Song.findById(song).populate("likes", "-__v -role");
+
+    return res.status(200).json({
+      status: "success",
+      likes: songFound.likes,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong",
+    });
+  }
+};
+
+const search = async (req, res) => {
+  const search = req.params.search;
+
+  try {
+    const songsFound = await Song.find({
+      name: { $regex: search, $options: "i" },
+    }).populate("artist", "-__v -role");
+
+    if (songsFound.length == 0) {
+      return res.status(200).json({
+        status: "success",
+        message: "There aren't songs with this name",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      songs: songsFound,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong",
     });
   }
 };
 
 const media = async (req, res) => {
-  const file = req.params.file;
+  const songId = req.params.id;
 
-  const song = await Song.findById(file);
+  const song = await Song.findById(songId);
 
   const filePath = path.resolve(path.join("./uploads", "songs", song.file));
 
   fs.stat(filePath, (error, song) => {
     if (error || !song) {
-      return res.status(200).json({
+      return res.status(404).json({
         status: "error",
-        message: "La canción no existe",
+        message: "Something went wrong",
       });
     }
 
@@ -224,10 +320,74 @@ const media = async (req, res) => {
   });
 };
 
+const like = async (req, res) => {
+  const id = req.user.id;
+  const { song } = req.body;
+
+  try {
+    const songFound = await Song.findById(song);
+
+    if (songFound.likes.includes(id)) {
+      return res.status(400).json({
+        status: "error",
+        message: "You already like it this song",
+      });
+    }
+
+    songFound.likes.push(id);
+    await songFound.save();
+
+    return res.status(200).json({
+      status: "success",
+      likes: songFound.likes,
+      song: songFound,
+    });
+  } catch (error) {}
+};
+
+const dislike = async (req, res) => {
+  const user = req.user.id;
+  const song = req.body.song;
+
+  try {
+    const songFound = await Song.findById(song);
+
+    if (!songFound) {
+      return res.status(404).json({
+        status: "error",
+        message: "The song doesn't exist",
+      });
+    }
+
+    const index = songFound.likes.indexOf(user);
+
+    songFound.likes.splice(index, 1);
+
+    await songFound.save();
+
+    return res.status(200).json({
+      status: "success",
+      likes: songFound.likes,
+      song: songFound,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong",
+    });
+  }
+};
+
 export default {
   save,
   edit,
   remove,
   list,
+  listByArtist,
+  listByAlbum,
+  likes,
+  search,
   media,
+  like,
+  dislike,
 };

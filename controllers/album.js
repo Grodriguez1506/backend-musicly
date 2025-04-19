@@ -142,71 +142,47 @@ const edit = async (req, res) => {
   }
 };
 
-const list = async (req, res) => {
-  let artistId = req.user.id;
-  let page = 1;
-
-  if (req.params.id) {
-    if (!isNaN(req.params.id)) {
-      page = req.params.id;
-    } else {
-      artistId = req.params.id;
-    }
-  }
-
-  if (req.params.page) {
-    page = req.params.page;
-  }
-
-  const options = {
-    page,
-    limit: 5,
-    select: "-__v",
-    populate: { path: "artist", select: "name surname artisticName" },
-  };
+const listByArtist = async (req, res) => {
+  let artist = req.params.id;
 
   try {
-    const albums = await Album.paginate({ artist: artistId }, options);
-
-    if (page > albums.totalPages) {
-      return res.status(400).json({
-        status: "error",
-        message: "Página inválida",
-        totalSongs: albums.totalDocs,
-        totalPages: albums.totalPages,
-        page: albums.page,
-      });
-    }
-
-    if (albums.docs.length < 1) {
-      return res.status(404).json({
-        status: "error",
-        message:
-          "No se han encontrado álbumes del artista seleccionado, valida el id suministrado",
-      });
-    }
+    const albums = await Album.find({ artist });
 
     return res.status(200).json({
       status: "success",
-      message: "Lista de albumes",
-      totalAlbums: albums.totalDocs,
-      itemsPerPage: albums.limit,
-      totalPages: albums.totalPages,
-      currentPage: albums.page,
-      albums: albums.docs,
+      albums,
     });
   } catch (error) {
-    console.log(error);
     return res.status(500).json({
       status: "error",
-      message: "Se ha producido un error en la búsqueda",
+      message: "Something went wrong",
     });
   }
+};
+
+const media = async (req, res) => {
+  const albumId = req.params.id;
+
+  const album = await Album.findById(albumId);
+
+  const filePath = path.resolve(album.image);
+
+  fs.stat(filePath, (error, song) => {
+    if (error || !song) {
+      return res.status(404).json({
+        status: "error",
+        message: "Something went wrong",
+      });
+    }
+
+    return res.status(200).sendFile(filePath);
+  });
 };
 
 export default {
   save,
   remove,
   edit,
-  list,
+  listByArtist,
+  media,
 };

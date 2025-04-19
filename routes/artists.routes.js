@@ -24,12 +24,16 @@ const upload = multer({ storage });
 
 router.post("/artist/register", artistController.register);
 router.post("/artist/login", artistController.login);
+router.post("/artist/refresh", artistController.refresh);
 router.get("/artist/profile/:id?", auth, artistController.profile);
 router.post(
   "/artist/upload",
   [auth, artistAccess, upload.single("avatar")],
   artistController.uploadAvatar
 );
+router.get("/artist/avatar/:file?", artistController.avatar);
+router.get("/artist/search/:search?", auth, artistController.search);
 router.post("/artist/logout", artistController.logout);
+router.get("/artist/list", auth, artistController.list);
 
 export default router;

@@ -5,9 +5,9 @@ import { userAccess } from "../middlewares/role.access.js";
 
 const router = Router();
 
-router.post("/follow/save/:id?", [auth, userAccess], followControllers.save);
+router.post("/follow/save", [auth, userAccess], followControllers.save);
 router.delete(
-  "/follow/unfollow/:id?",
+  "/follow/unfollow",
   [auth, userAccess],
   followControllers.unfollow
 );
@@ -16,5 +16,6 @@ router.get(
   auth,
   followControllers.followedArtists
 );
+router.get("/follow/feed", auth, followControllers.feed);
 
 export default router;

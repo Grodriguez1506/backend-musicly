@@ -28,7 +28,13 @@ router.post(
 );
 router.put("/song/edit/:id?", [auth, artistAccess], songController.edit);
 router.delete("/song/remove/:id?", [auth, artistAccess], songController.remove);
-router.get("/song/list/:id?/:page?", auth, songController.list);
-router.get("/song/media/:file?", auth, songController.media);
+router.get("/song/list/:page?", auth, songController.list);
+router.get("/song/list-by-artist/:id?", auth, songController.listByArtist);
+router.get("/song/list-by-album/:id?", auth, songController.listByAlbum);
+router.get("/song/likes/:id?", auth, songController.likes);
+router.get("/song/search/:search?", auth, songController.search);
+router.get("/song/media/:id?", auth, songController.media);
+router.post("/song/like", auth, songController.like);
+router.post("/song/dislike", auth, songController.dislike);
 
 export default router;

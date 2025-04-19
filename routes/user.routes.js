@@ -32,5 +32,6 @@ router.post(
   userController.uploadAvatar
 );
 router.post("/user/logout", userController.logout);
+router.get("/user/avatar/:file?", userController.avatar);
 
 export default router;

@@ -9,6 +9,10 @@ import {
   createRefreshToken,
   createNewAccesToken,
 } from "../helpers/jwt.js";
+import user from "../models/user.js";
+import { getRootPath } from "../rootpath.js";
+import path from "path";
+import fs from "fs";
 
 const register = async (req, res) => {
   let params = req.body;
@@ -148,7 +152,7 @@ const profile = async (req, res) => {
   const userIdentity = req.user;
 
   try {
-    const user = await User.findById(userIdentity.id);
+    const user = await User.findById(userIdentity.id).select("-__v -role");
     const artistFollowed = await Follow.countDocuments({
       user: userIdentity.id,
     });
@@ -158,7 +162,7 @@ const profile = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: "Bienvenido al perfil",
+      message: "Welcome to profile",
       user,
       artistFollowed,
       playlists: userPlaylists,
@@ -173,7 +177,30 @@ const profile = async (req, res) => {
 
 const uploadAvatar = async (req, res) => {
   const userId = req.user.id;
-  const avatar = req.file.filename;
+  const file = req.file;
+  const avatar = file.filename;
+
+  const ext = avatar.split(".");
+
+  if (
+    ext[ext.length - 1] != "png" &&
+    ext[ext.length - 1] != "jpg" &&
+    ext[ext.length - 1] != "jpeg"
+  ) {
+    fs.unlink(path.join(file.destination, avatar), (error) => {
+      if (error) {
+        return res.status(500).json({
+          status: "error",
+          message: "Something went wrong",
+        });
+      }
+    });
+
+    return res.status(400).json({
+      status: "error",
+      message: "File extension must be .jpg .png .jpeg",
+    });
+  }
 
   try {
     const avatarUpload = await User.findByIdAndUpdate(
@@ -196,6 +223,36 @@ const uploadAvatar = async (req, res) => {
   }
 };
 
+const avatar = async (req, res) => {
+  const file = req.params.file;
+  if (!file) {
+    return res.status(404).json({
+      status: "error",
+      message: "The file in the URL is mandatory",
+    });
+  }
+  try {
+    const userFound = await user.findOne({ avatar: file });
+    if (!userFound) {
+      return res.status(404).json({
+        status: "error",
+        message: "The file doesn't exist",
+      });
+    }
+
+    const rootPath = getRootPath();
+    const filename = userFound.avatar;
+    const filePath = path.join(rootPath, "uploads", "avatar", filename);
+
+    return res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: "Something went wrong",
+    });
+  }
+};
+
 const logout = (req, res) => {
   res.clearCookie("refreshToken");
 
@@ -211,5 +268,6 @@ export default {
   refresh,
   profile,
   uploadAvatar,
+  avatar,
   logout,
 };
